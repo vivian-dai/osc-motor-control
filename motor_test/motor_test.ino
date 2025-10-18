@@ -1,5 +1,6 @@
 #include <ESP32Servo.h>
 #include <WiFi.h>
+#include <WiFiUdp.h>
 
 #include <env.h>
 
@@ -10,7 +11,7 @@
 
 Servo l_servo;
 Servo r_servo;
-NetworkServer server(PORT);
+WiFiUDP udp_server;
 
 void setup() {
   // put your setup code here, to run once:
@@ -25,6 +26,7 @@ void setup() {
   Serial.print("Connecting to ");
   Serial.println(ssid);
 
+  // WiFi.mode(WIFI_AP);
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
@@ -34,44 +36,33 @@ void setup() {
 
   Serial.println("");
   Serial.println("WiFi connected.");
-  Serial.println("address:");
-  Serial.println(WiFi.localIP() + ":" + PORT);
+  Serial.println(WiFi.localIP());
 
-  server.begin();
-
+  udp_server.begin(PORT);
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  // servo.write(0);
-  // delay(1000);
-  // servo.write(180);
-  // delay(1000);
+  int sz = udp_server.parsePacket();
+  if(sz > 0) {
+    Serial.println(sz);
+    String packet = "";
+    while(sz > 0) {
+      char c = udp_server.read();
+      packet += c;
+      sz--;
+    }
+    Serial.println(packet);
+    if(packet.startsWith("/left")) {
+      int degree = packet.substring(5).toInt();
+      if(degree >= 0 && degree <= 180) {
+        l_servo.write(degree);
+      }
 
-  // Serial.println("ok");
-  // for(int i = 0;i <= 180;i++) {
-  //   servo.write(i);
-  //   delay(15);
-  // }
-  // for(int i = 180;i >= 0;i--) {
-  //   servo.write(i);
-  //   delay(15);
-  // }
-
-  NetworkClient client = server.accept();
-  if(client) {
-    String cur_line = "";
-    while (client.connected()) {
-      if (client.available()) {
-        char c = client.read();
-        cur_line += c;
-        if(c == '\n') {
-          Serial.println(cur_line);
-          // based on curline move things
-        }
+    } else if(packet.startsWith("/right")) {
+      int degree = packet.substring(6).toInt();
+      if(degree >= 0 && degree <= 180) {
+        r_servo.write(degree);
       }
     }
-    client.stop();
   }
-
 }
